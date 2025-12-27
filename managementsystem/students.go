@@ -23,30 +23,30 @@ type Student struct {
 }
 
 // validation
-func ValidateUser(student Student) error {
-	if student.Email == "" {
+func ValidateUser(students Student) error {
+	if students.Email == "" {
 		return fmt.Errorf("email is invalid and empty")
 	}
-	if strings.TrimSpace(student.Name) == "" {
+	if strings.TrimSpace(students.Name) == "" {
 		return fmt.Errorf("name is invalid and empty")
 	}
-	if !strings.HasSuffix(student.Email, "@gmail.com") {
+	if !strings.HasSuffix(students.Email, "@gmail.com") {
 		return fmt.Errorf("email is invalid and does not contain @gmail.com")
 	}
-	prefix := strings.TrimSuffix(student.Email, "@gmail.com")
+	prefix := strings.TrimSuffix(students.Email, "@gmail.com")
 	if prefix == "" {
 		return fmt.Errorf("email must contains a prefix before the @gmail.com ")
 	}
-	if student.Age <= 0 {
+	if students.Age <= 0 {
 		return fmt.Errorf("Age is less than 0")
 	}
-	if student.Age >= 100 {
+	if students.Age >= 100 {
 		return fmt.Errorf("Age is grater than 0")
 	}
-	if student.Dept == "" {
+	if students.Dept == "" {
 		return fmt.Errorf("Dept is invalid!")
 	}
-	if student.Year == 0 {
+	if students.Year <= 0 {
 		return fmt.Errorf("Year is invalid, please enter a valid year")
 	}
 	return nil
@@ -86,12 +86,13 @@ func (h *HybridHandler5) GetStudentsHandler(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	value, err := h.Redis.Client.Get(h.Ctx, id).Result()
-	if err == nil {
-		log.Println("Cache hit!")
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(value))
-		return
+	if h.Redis != nil && h.Redis.Client != nil {
+		if value, err := h.Redis.Client.Get(h.Ctx, id).Result(); err == nil {
+			log.Println("Cache hit!")
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(value))
+			return
+		}
 	}
 	fmt.Println("Cache miss Quering MySQL ...")
 	row := h.MySQL.DB.QueryRow("SELECT id , name , email , age , dept , year FROM students WHERE  id=?", id)
@@ -106,7 +107,9 @@ func (h *HybridHandler5) GetStudentsHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.Redis.Client.Set(h.Ctx, id, jsondata, 10*time.Second)
+	if h.Redis != nil && h.Redis.Client != nil {
+		_ = h.Redis.Client.Set(h.Ctx, id, jsondata, 10*time.Second).Err()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsondata)
 }
@@ -141,8 +144,9 @@ func (h *HybridHandler5) UpdatestudentsHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-	h.Redis.Client.Set(h.Ctx, fmt.Sprint(students.ID), jsonData, 10*time.Minute)
-
+	if h.Redis != nil && h.Redis.Client != nil {
+		h.Redis.Client.Set(h.Ctx, fmt.Sprint(students.ID), jsonData, 10*time.Minute).Err()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonData)
@@ -165,14 +169,13 @@ func (h *HybridHandler5) DeleteStudentsHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if rows == 0 {
-		http.Error(w, "user not found", http.StatusNotFound)
+		http.Error(w, "student not found", http.StatusNotFound)
 		return
 	}
-
-	h.Redis.Client.Del(h.Ctx, id)
-
+	if h.Redis != nil && h.Redis.Client != nil {
+		_ = h.Redis.Client.Del(h.Ctx, id).Err()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-
-	w.Write([]byte("user deleted"))
+	w.Write([]byte("student deleted"))
 }

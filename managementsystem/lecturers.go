@@ -87,7 +87,7 @@ func (h *HybridHandler5) GetLecturersHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	fmt.Println("Cache miss Quering MySQL ...")
-	row := h.MySQL.DB.QueryRow("SELECT id , name , email , dept , designation FROM students WHERE  id=?", id)
+	row := h.MySQL.DB.QueryRow("SELECT id , name , email , dept , designation FROM lecturers WHERE  id=?", id)
 
 	var lecturers Lecturer
 	if err := row.Scan(&lecturers.ID, &lecturers.Name, &lecturers.Email, &lecturers.Dept, &lecturers.Designation); err != nil {
@@ -158,7 +158,7 @@ func (h *HybridHandler5) DeleteLecturersHandler3(w http.ResponseWriter, r *http.
 		return
 	}
 	if rows == 0 {
-		http.Error(w, "user not found", http.StatusNotFound)
+		http.Error(w, "lecturer not found", http.StatusNotFound)
 		return
 	}
 
@@ -167,5 +167,5 @@ func (h *HybridHandler5) DeleteLecturersHandler3(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	w.Write([]byte("user deleted"))
+	w.Write([]byte("lecturer deleted"))
 }

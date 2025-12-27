@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 )
 
@@ -47,7 +48,7 @@ func ValidateLibrary(book Book) error {
 }
 
 // create students
-func (h *HybridHandler) CreateBookHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HybridHandler5) CreateBookHandler(w http.ResponseWriter, r *http.Request) {
 	var book Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -59,7 +60,7 @@ func (h *HybridHandler) CreateBookHandler(w http.ResponseWriter, r *http.Request
 		json.NewEncoder(w).Encode(map[string]string{"Error": err.Error()})
 		return
 	}
-	res, err := h.MySQL.DB.Exec("INSERT INTO book ( title , author , available_copies) VALUES ( ? , ? , ?)", book.Title, book.Author, book.Available_copies)
+	res, err := h.MySQL.DB.Exec("INSERT INTO books (book_id, title , author , available_copies) VALUES ( ? , ? , ? , ?)", book.Book_id, book.Title, book.Author, book.Available_copies)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -76,7 +77,7 @@ func (h *HybridHandler) CreateBookHandler(w http.ResponseWriter, r *http.Request
 }
 
 // Get students
-func (h *HybridHandler) GetBookHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HybridHandler5) GetBookHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	Book_id := vars["id"]
 
@@ -106,10 +107,15 @@ func (h *HybridHandler) GetBookHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Borrow books
-func (h *HybridHandler) BorrowBook(w http.ResponseWriter, r *http.Request) {
+func (h *HybridHandler5) BorrowBook(w http.ResponseWriter, r *http.Request) {
 	var record Borrow_records
 	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	// validate user type
+	if record.User_type != "student" && record.User_type != "lecturer" {
+		http.Error(w, "invalid user_type, must be 'student' or 'lecturer'", http.StatusBadRequest)
 		return
 	}
 	//  Check if Book is available
@@ -130,7 +136,7 @@ func (h *HybridHandler) BorrowBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//  decrement available copies
-	_, err = h.MySQL.DB.Exec("UPDATE books SET available_copies = availabe_copies-1 WHERE book_id=?", record.Book_id)
+	_, err = h.MySQL.DB.Exec("UPDATE books SET available_copies = available_copies-1 WHERE book_id=?", record.Book_id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -141,26 +147,31 @@ func (h *HybridHandler) BorrowBook(w http.ResponseWriter, r *http.Request) {
 }
 
 // Return book
-func (h *HybridHandler) ReturnBook(w http.ResponseWriter, r *http.Request) {
+func (h *HybridHandler5) ReturnBook(w http.ResponseWriter, r *http.Request) {
 	var record Borrow_records
 	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
 		http.Error(w, "invalid json", http.StatusInternalServerError)
 		return
 	}
+	// validate user type
+	if record.User_type != "student" && record.User_type != "lecturer" {
+		http.Error(w, "invalid user_type, must be 'student' or 'lecturer'", http.StatusBadRequest)
+		return
+	}
 	// Update borrow_borrow record with return date
-	_, err := h.MySQL.DB.Exec("UPDATE borrow_record SET return_date=CURDATE() WHERE user_id=? AND book_id=? AND return_date IS NULL", record.User_id, record.Book_id)
+	_, err := h.MySQL.DB.Exec("UPDATE borrow_records SET return_date=CURDATE() WHERE user_id=? AND book_id=? AND return_date IS NULL", record.User_id, record.Book_id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	//  increment available copies
-	_, err = h.MySQL.DB.Exec("UPDATE books SET available_copies = availabe_copies+1 WHERE book_id=?", record.Book_id)
+	_, err = h.MySQL.DB.Exec("UPDATE books SET available_copies = available_copies+1 WHERE book_id=?", record.Book_id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "Book borrowed"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "Book return"})
 
 }

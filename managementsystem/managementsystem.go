@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -25,7 +26,7 @@ type HybridHandler5 struct {
 }
 
 func ConnectMySQL() (*MySQLInstance5, error) {
-	db, err := sql.Open("mysql", os.Getenv("MYSQL_DB"))
+	db, err := sql.Open("mysql", os.Getenv("MYSQL_DSN"))
 	if err != nil {
 		return nil, err
 	}

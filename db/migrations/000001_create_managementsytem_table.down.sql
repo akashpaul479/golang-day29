@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS students;
+
+DROP TABLE IF EXISTS lecturers;
+
+DROP TABLE IF EXISTS books;
+
+DROP TABLE IF EXISTS borrow_records;

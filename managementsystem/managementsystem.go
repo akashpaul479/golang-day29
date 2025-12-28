@@ -67,7 +67,7 @@ func Managementsystem() {
 
 	// for library
 	r.HandleFunc("/books", handler.CreateBookHandler).Methods("POST")
-	r.HandleFunc("/books", handler.GetBookHandler).Methods("GET")
+	r.HandleFunc("/books/{id}", handler.GetBookHandler).Methods("GET")
 	r.HandleFunc("/borrow", handler.BorrowBook).Methods("POST")
 	r.HandleFunc("/return", handler.ReturnBook).Methods("POST")
 

@@ -29,38 +29,36 @@ type Borrow_records struct {
 
 // validation
 func ValidateLibrary(book Book) error {
-	if book.Title == "" {
-		return fmt.Errorf("title is invalid ")
+	if book.Book_id < 0 {
+		return fmt.Errorf("book_id is invalid")
 	}
 	if strings.TrimSpace(book.Title) == "" {
 		return fmt.Errorf("title is invalid and empty")
 	}
-	if book.Author == "" {
-		return fmt.Errorf("Author is invalid")
-	}
 	if strings.TrimSpace(book.Author) == "" {
 		return fmt.Errorf("Author is invalid and empty")
 	}
-	if book.Book_id <= 0 {
-		return fmt.Errorf("book_id is less than 0")
+	if book.Available_copies <= 0 {
+		return fmt.Errorf("available_copies is less than 0")
 	}
+
 	return nil
 }
 
 // create students
 func (h *HybridHandler5) CreateBookHandler(w http.ResponseWriter, r *http.Request) {
-	var book Book
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
+	var books Book
+	if err := json.NewDecoder(r.Body).Decode(&books); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := ValidateLibrary(book); err != nil {
+	if err := ValidateLibrary(books); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"Error": err.Error()})
 		return
 	}
-	res, err := h.MySQL.DB.Exec("INSERT INTO books (book_id, title , author , available_copies) VALUES ( ? , ? , ? , ?)", book.Book_id, book.Title, book.Author, book.Available_copies)
+	res, err := h.MySQL.DB.Exec("INSERT INTO books (title , author , available_copies) VALUES ( ? , ? , ?)", books.Title, books.Author, books.Available_copies)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -70,18 +68,19 @@ func (h *HybridHandler5) CreateBookHandler(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	book.Book_id = int(id)
+	books.Book_id = int(id)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(book)
+	json.NewEncoder(w).Encode(books)
 }
 
 // Get students
 func (h *HybridHandler5) GetBookHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	Book_id := vars["id"]
+	id := vars["id"]
 
-	value, err := h.Redis.Client.Get(h.Ctx, Book_id).Result()
+	value, err := h.Redis.Client.Get(h.Ctx, id).Result()
 	if err == nil {
 		log.Println("Cache hit!")
 		w.Header().Set("Content-Type", "application/json")
@@ -89,19 +88,19 @@ func (h *HybridHandler5) GetBookHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	fmt.Println("Cache miss Quering MySQL ...")
-	row := h.MySQL.DB.QueryRow("SELECT book_id , title , author , available_copies FROM books WHERE  book_id=?", Book_id)
+	row := h.MySQL.DB.QueryRow("SELECT book_id , title , author , available_copies FROM books WHERE  book_id=?", id)
 
-	var book Book
-	if err := row.Scan(&book.Book_id, &book.Title, book.Author, book.Available_copies); err != nil {
+	var books Book
+	if err := row.Scan(&books.Book_id, &books.Title, &books.Author, &books.Available_copies); err != nil {
 		http.Error(w, "Book not found", http.StatusNotFound)
 		return
 	}
-	jsondata, err := json.Marshal(book)
+	jsondata, err := json.Marshal(books)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.Redis.Client.Set(h.Ctx, Book_id, jsondata, 10*time.Second)
+	h.Redis.Client.Set(h.Ctx, id, jsondata, 10*time.Second)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsondata)
 }
@@ -158,11 +157,15 @@ func (h *HybridHandler5) ReturnBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid user_type, must be 'student' or 'lecturer'", http.StatusBadRequest)
 		return
 	}
-	// Update borrow_borrow record with return date
-	_, err := h.MySQL.DB.Exec("UPDATE borrow_records SET return_date=CURDATE() WHERE user_id=? AND book_id=? AND return_date IS NULL", record.User_id, record.Book_id)
+	// Update borrow_books record with return date
+	res, err := h.MySQL.DB.Exec("UPDATE borrow_records SET return_date=CURDATE() WHERE user_id=? AND book_id=? AND return_date IS NULL", record.User_id, record.Book_id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		http.Error(w, "no active borrow record found", http.StatusNotFound)
 	}
 	//  increment available copies
 	_, err = h.MySQL.DB.Exec("UPDATE books SET available_copies = available_copies+1 WHERE book_id=?", record.Book_id)
